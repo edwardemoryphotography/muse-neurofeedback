@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,44 +9,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Mock data for demonstration - in production, this would come from AsyncStorage or a database
-const mockSessions = [
-  {
-    id: '1',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    duration: 600, // 10 minutes
-    calmScore: 72,
-    focusScore: 65,
-    type: 'meditation',
-  },
-  {
-    id: '2',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    duration: 900, // 15 minutes
-    calmScore: 85,
-    focusScore: 78,
-    type: 'meditation',
-  },
-  {
-    id: '3',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
-    duration: 300, // 5 minutes
-    calmScore: 58,
-    focusScore: 62,
-    type: 'focus',
-  },
-  {
-    id: '4',
-    date: new Date(Date.now() - 1000 * 60 * 60 * 72), // 3 days ago
-    duration: 1200, // 20 minutes
-    calmScore: 91,
-    focusScore: 88,
-    type: 'meditation',
-  },
-];
+// Session data structure stored from real meditation sessions
+export interface StoredSession {
+  id: string;
+  date: string; // ISO date string
+  duration: number; // seconds
+  calmScore: number;
+  focusScore: number;
+  type: 'meditation' | 'focus';
+}
 
 type TimeFilter = 'week' | 'month' | 'all';
+
+const SESSIONS_STORAGE_KEY = '@muse_sessions';
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -59,7 +36,8 @@ function formatDuration(seconds: number): string {
   return `${hours}h ${remainingMins}m`;
 }
 
-function formatDate(date: Date): string {
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -76,14 +54,121 @@ function formatDate(date: Date): string {
   });
 }
 
+function calculateStreak(sessions: StoredSession[]): number {
+  if (sessions.length === 0) return 0;
+  
+  const sortedSessions = [...sessions].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  
+  let streak = 0;
+  let currentDate = new Date();
+  currentDate.setHours(0, 0, 0, 0);
+  
+  for (const session of sortedSessions) {
+    const sessionDate = new Date(session.date);
+    sessionDate.setHours(0, 0, 0, 0);
+    
+    const diffDays = Math.floor(
+      (currentDate.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    
+    if (diffDays === 0 || diffDays === 1) {
+      streak++;
+      currentDate = sessionDate;
+    } else {
+      break;
+    }
+  }
+  
+  return streak;
+}
+
 export default function HistoryScreen() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('week');
+  const [sessions, setSessions] = useState<StoredSession[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Calculate statistics
-  const totalMinutes = mockSessions.reduce((acc, s) => acc + s.duration / 60, 0);
-  const avgCalm = mockSessions.reduce((acc, s) => acc + s.calmScore, 0) / mockSessions.length;
-  const avgFocus = mockSessions.reduce((acc, s) => acc + s.focusScore, 0) / mockSessions.length;
-  const currentStreak = 4; // Mock streak
+  // Load sessions from storage
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  const loadSessions = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(SESSIONS_STORAGE_KEY);
+      if (stored) {
+        setSessions(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter sessions based on time filter
+  const filteredSessions = sessions.filter((session) => {
+    const sessionDate = new Date(session.date);
+    const now = new Date();
+    const diffDays = Math.floor(
+      (now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    switch (timeFilter) {
+      case 'week':
+        return diffDays <= 7;
+      case 'month':
+        return diffDays <= 30;
+      default:
+        return true;
+    }
+  });
+
+  // Calculate statistics from real sessions
+  const totalMinutes = filteredSessions.reduce((acc, s) => acc + s.duration / 60, 0);
+  const avgCalm = filteredSessions.length > 0
+    ? filteredSessions.reduce((acc, s) => acc + s.calmScore, 0) / filteredSessions.length
+    : 0;
+  const avgFocus = filteredSessions.length > 0
+    ? filteredSessions.reduce((acc, s) => acc + s.focusScore, 0) / filteredSessions.length
+    : 0;
+  const currentStreak = calculateStreak(sessions);
+
+  // Calculate weekly activity for chart
+  const getWeeklyActivity = () => {
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const now = new Date();
+    const weekData = days.map((day, index) => {
+      const targetDate = new Date(now);
+      targetDate.setDate(now.getDate() - (6 - index));
+      targetDate.setHours(0, 0, 0, 0);
+      
+      const nextDate = new Date(targetDate);
+      nextDate.setDate(targetDate.getDate() + 1);
+      
+      const dayMinutes = sessions
+        .filter((s) => {
+          const sessionDate = new Date(s.date);
+          return sessionDate >= targetDate && sessionDate < nextDate;
+        })
+        .reduce((acc, s) => acc + s.duration / 60, 0);
+      
+      return {
+        day,
+        minutes: dayMinutes,
+        isToday: index === 6,
+      };
+    });
+    
+    const maxMinutes = Math.max(...weekData.map((d) => d.minutes), 1);
+    return weekData.map((d) => ({
+      ...d,
+      height: (d.minutes / maxMinutes) * 100,
+    }));
+  };
+
+  const weeklyActivity = getWeeklyActivity();
 
   const timeFilters: { filter: TimeFilter; label: string }[] = [
     { filter: 'week', label: '7 Days' },
@@ -173,37 +258,33 @@ export default function HistoryScreen() {
           </View>
         </View>
 
-        {/* Weekly Chart Placeholder */}
+        {/* Weekly Chart */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Weekly Activity</Text>
           <View style={styles.weeklyChart}>
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => {
-              const height = [60, 80, 40, 100, 70, 90, 30][index];
-              const isToday = index === 6;
-              return (
-                <View key={index} style={styles.dayColumn}>
-                  <View style={styles.dayBarContainer}>
-                    <View
-                      style={[
-                        styles.dayBar,
-                        {
-                          height: `${height}%`,
-                          backgroundColor: isToday ? '#8B5CF6' : 'rgba(139, 92, 246, 0.3)',
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text
+            {weeklyActivity.map((data, index) => (
+              <View key={index} style={styles.dayColumn}>
+                <View style={styles.dayBarContainer}>
+                  <View
                     style={[
-                      styles.dayLabel,
-                      isToday && styles.dayLabelActive,
+                      styles.dayBar,
+                      {
+                        height: `${Math.max(data.height, 5)}%`,
+                        backgroundColor: data.isToday ? '#8B5CF6' : 'rgba(139, 92, 246, 0.3)',
+                      },
                     ]}
-                  >
-                    {day}
-                  </Text>
+                  />
                 </View>
-              );
-            })}
+                <Text
+                  style={[
+                    styles.dayLabel,
+                    data.isToday && styles.dayLabelActive,
+                  ]}
+                >
+                  {data.day}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -211,7 +292,11 @@ export default function HistoryScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Sessions</Text>
           <View style={styles.sessionList}>
-            {mockSessions.length === 0 ? (
+            {loading ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>Loading...</Text>
+              </View>
+            ) : filteredSessions.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons
                   name="calendar-outline"
@@ -220,71 +305,102 @@ export default function HistoryScreen() {
                 />
                 <Text style={styles.emptyText}>No sessions yet</Text>
                 <Text style={styles.emptySubtext}>
-                  Complete a meditation session to see it here
+                  Complete a meditation session with your Muse headband to see it here
                 </Text>
               </View>
             ) : (
-              mockSessions.map((session) => (
-                <TouchableOpacity key={session.id} style={styles.sessionCard}>
-                  <View style={styles.sessionIcon}>
-                    <Ionicons
-                      name={session.type === 'meditation' ? 'leaf' : 'flash'}
-                      size={20}
-                      color={session.type === 'meditation' ? '#10B981' : '#F59E0B'}
-                    />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionType}>
-                      {session.type === 'meditation' ? 'Meditation' : 'Focus'} Session
-                    </Text>
-                    <Text style={styles.sessionDate}>{formatDate(session.date)}</Text>
-                  </View>
-                  <View style={styles.sessionStats}>
-                    <View style={styles.sessionStat}>
-                      <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.4)" />
-                      <Text style={styles.sessionStatText}>
-                        {formatDuration(session.duration)}
+              filteredSessions
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 10)
+                .map((session) => (
+                  <TouchableOpacity key={session.id} style={styles.sessionCard}>
+                    <View style={styles.sessionIcon}>
+                      <Ionicons
+                        name={session.type === 'meditation' ? 'leaf' : 'flash'}
+                        size={20}
+                        color={session.type === 'meditation' ? '#10B981' : '#F59E0B'}
+                      />
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.sessionType}>
+                        {session.type === 'meditation' ? 'Meditation' : 'Focus'} Session
                       </Text>
+                      <Text style={styles.sessionDate}>{formatDate(session.date)}</Text>
                     </View>
-                    <View style={styles.sessionScores}>
-                      <View style={styles.sessionScore}>
-                        <View style={[styles.scoreDot, { backgroundColor: '#10B981' }]} />
-                        <Text style={styles.scoreText}>{session.calmScore}%</Text>
+                    <View style={styles.sessionStats}>
+                      <View style={styles.sessionStat}>
+                        <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.4)" />
+                        <Text style={styles.sessionStatText}>
+                          {formatDuration(session.duration)}
+                        </Text>
                       </View>
-                      <View style={styles.sessionScore}>
-                        <View style={[styles.scoreDot, { backgroundColor: '#F59E0B' }]} />
-                        <Text style={styles.scoreText}>{session.focusScore}%</Text>
+                      <View style={styles.sessionScores}>
+                        <View style={styles.sessionScore}>
+                          <View style={[styles.scoreDot, { backgroundColor: '#10B981' }]} />
+                          <Text style={styles.scoreText}>{Math.round(session.calmScore)}%</Text>
+                        </View>
+                        <View style={styles.sessionScore}>
+                          <View style={[styles.scoreDot, { backgroundColor: '#F59E0B' }]} />
+                          <Text style={styles.scoreText}>{Math.round(session.focusScore)}%</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              ))
+                  </TouchableOpacity>
+                ))
             )}
           </View>
         </View>
 
-        {/* Insights */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Insights</Text>
-          <View style={styles.insightCard}>
-            <View style={styles.insightIcon}>
-              <Ionicons name="trending-up" size={24} color="#10B981" />
-            </View>
-            <View style={styles.insightContent}>
-              <Text style={styles.insightTitle}>You're improving!</Text>
-              <Text style={styles.insightText}>
-                Your average calm score has increased by 12% compared to last week.
-                Keep up the great work! 🎉
-              </Text>
+        {/* Insights - only show if there's data */}
+        {filteredSessions.length >= 3 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Insights</Text>
+            <View style={styles.insightCard}>
+              <View style={styles.insightIcon}>
+                <Ionicons 
+                  name={avgCalm > 60 ? 'trending-up' : 'analytics-outline'} 
+                  size={24} 
+                  color={avgCalm > 60 ? '#10B981' : '#F59E0B'} 
+                />
+              </View>
+              <View style={styles.insightContent}>
+                <Text style={[styles.insightTitle, { color: avgCalm > 60 ? '#10B981' : '#F59E0B' }]}>
+                  {avgCalm > 60 ? 'Great Progress!' : 'Keep Practicing'}
+                </Text>
+                <Text style={styles.insightText}>
+                  {avgCalm > 60
+                    ? `Your average calm score of ${Math.round(avgCalm)}% shows you're developing strong mindfulness skills.`
+                    : `Regular practice will help improve your ${Math.round(avgCalm)}% calm score. Try longer sessions.`
+                  }
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Spacer for tab bar */}
         <View style={styles.tabBarSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+// Export function to save sessions from meditation screen
+export async function saveSession(session: Omit<StoredSession, 'id'>): Promise<void> {
+  try {
+    const stored = await AsyncStorage.getItem(SESSIONS_STORAGE_KEY);
+    const sessions: StoredSession[] = stored ? JSON.parse(stored) : [];
+    
+    const newSession: StoredSession = {
+      ...session,
+      id: `session_${Date.now()}`,
+    };
+    
+    sessions.push(newSession);
+    await AsyncStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  } catch (error) {
+    console.error('Error saving session:', error);
+  }
 }
 
 const styles = StyleSheet.create({
@@ -428,6 +544,8 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   sessionCard: {
     flexDirection: 'row',
@@ -515,7 +633,6 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#10B981',
     marginBottom: 4,
   },
   insightText: {

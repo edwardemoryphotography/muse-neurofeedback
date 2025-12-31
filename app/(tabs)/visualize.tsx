@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useMuseOrSimulator } from '../../src/hooks/useMuseOrSimulator';
+import { useMuse } from '../../src/hooks/useMuse';
 import { EEGWaveform } from '../../src/components/EEGWaveform';
 import { BrainWaveChart } from '../../src/components/BrainWaveChart';
 import { FREQUENCY_BANDS, FrequencyBand } from '../../src/services/MuseService';
@@ -16,7 +16,7 @@ import { FREQUENCY_BANDS, FrequencyBand } from '../../src/services/MuseService';
 type ViewMode = 'waves' | 'bands' | 'both';
 
 export default function VisualizeScreen() {
-  const { state, eegData, bandPowers, isSimulated } = useMuseOrSimulator();
+  const { state, eegData, bandPowers } = useMuse();
   const [viewMode, setViewMode] = useState<ViewMode>('both');
 
   const viewModes: { mode: ViewMode; label: string; icon: string }[] = [
@@ -47,10 +47,8 @@ export default function VisualizeScreen() {
           </View>
           {state.isConnected && (
             <View style={styles.liveBadge}>
-              <View style={[styles.liveDot, isSimulated && { backgroundColor: '#06B6D4' }]} />
-              <Text style={[styles.liveText, isSimulated && { color: '#06B6D4' }]}>
-                {isSimulated ? 'DEMO' : 'LIVE'}
-              </Text>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
             </View>
           )}
         </View>

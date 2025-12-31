@@ -10,59 +10,55 @@ A beautiful mobile application for Muse EEG headbands with real-time brain visua
 
 - **🧠 Real-time EEG Visualization** - Watch your brain activity in real-time with beautiful charts
 - **📊 Frequency Band Analysis** - See Delta, Theta, Alpha, Beta, and Gamma wave activity
-- **🧘 Guided Meditation** - Timed meditation sessions with calm/focus scoring
-- **📈 Progress Tracking** - View your meditation history and track improvements
+- **🧘 Guided Meditation** - Timed meditation sessions with calm/focus scoring from real EEG data
+- **📈 Progress Tracking** - View your meditation history stored locally on your device
 - **🔋 Battery & Signal Monitoring** - Keep track of your Muse headband status
 - **🌙 Beautiful Dark UI** - Modern, eye-friendly interface designed for relaxation
+- **📱 100% Real Data** - No simulated or mock data - all brain activity comes directly from your Muse headband
 
 ## 📱 Testing on Your iPhone
 
-### Quick Start (Recommended)
+### Requirements
 
-The easiest way to test this app on your iPhone is using **Expo Go**:
+This app requires a **Muse headband** (Muse 2 or Muse S) to function. All brain activity data comes directly from your headband via Bluetooth - there is no simulated or demo mode.
+
+### Development Build (Required for Bluetooth)
+
+Since Bluetooth requires native code, you need a development build to connect to your Muse headband:
 
 1. **Install Dependencies**
    ```bash
    npm install
    ```
 
-2. **Start the Development Server**
-   ```bash
-   npx expo start
-   ```
-
-3. **Scan the QR Code**
-   - Download the **Expo Go** app from the App Store on your iPhone
-   - Open the Camera app and scan the QR code shown in your terminal
-   - The app will load directly on your phone!
-
-### For Full Bluetooth Support (Development Build)
-
-Since Bluetooth requires native code, you'll need a development build for full Muse headband connectivity:
-
-1. **Install EAS CLI**
+2. **Install EAS CLI**
    ```bash
    npm install -g eas-cli
    ```
 
-2. **Login to Expo**
+3. **Login to Expo**
    ```bash
    eas login
    ```
 
-3. **Create a Development Build**
+4. **Create a Development Build**
    ```bash
    eas build --profile development --platform ios
    ```
 
-4. **Install on Your Device**
+5. **Install on Your Device**
    - Once the build completes, you'll receive a link to download the app
    - Install it on your iPhone using the provided instructions
 
-5. **Start Development Server**
+6. **Start Development Server**
    ```bash
    npx expo start --dev-client
    ```
+
+7. **Connect Your Muse**
+   - Turn on your Muse headband (hold button until it flashes)
+   - Open the app and tap "Scan for Muse" on the Home screen
+   - Select your device to connect
 
 ### Running on iOS Simulator (Mac Only)
 

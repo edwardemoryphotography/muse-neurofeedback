@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useMuseOrSimulator } from '../../src/hooks/useMuseOrSimulator';
+import { useMuse } from '../../src/hooks/useMuse';
 import { useMeditationSession } from '../../src/hooks/useMeditationSession';
 import { CalmMeter } from '../../src/components/CalmMeter';
 import { SessionStats } from '../../src/components/SessionStats';
@@ -20,12 +20,11 @@ import { BrainWaveChart } from '../../src/components/BrainWaveChart';
 type SessionDuration = 5 | 10 | 15 | 20 | 30;
 
 export default function MeditateScreen() {
-  const { state, bandPowers, isSimulated } = useMuseOrSimulator();
+  const { state, bandPowers } = useMuse();
   const {
     session,
     isActive,
     currentCalm,
-    currentFocus,
     elapsedTime,
     start,
     stop,
@@ -62,15 +61,13 @@ export default function MeditateScreen() {
       Alert.alert(
         'Muse Not Connected',
         'Please connect your Muse headband from the Home screen to track your brain activity during meditation.',
-        [
-          { text: 'Start Anyway', onPress: () => start() },
-          { text: 'Cancel', style: 'cancel' },
-        ]
+        [{ text: 'OK' }]
       );
-    } else {
-      start();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return;
     }
+    
+    start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [state.isConnected, start]);
 
   const handleStop = useCallback(() => {
@@ -165,9 +162,12 @@ export default function MeditateScreen() {
             </View>
 
             {/* Start Button */}
-            <TouchableOpacity style={styles.startButton} onPress={handleStart}>
+            <TouchableOpacity 
+              style={[styles.startButton, !state.isConnected && styles.startButtonDisabled]} 
+              onPress={handleStart}
+            >
               <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']}
+                colors={state.isConnected ? ['#8B5CF6', '#7C3AED'] : ['#4B5563', '#374151']}
                 style={styles.startButtonGradient}
               >
                 <Ionicons name="play" size={28} color="#ffffff" />
@@ -180,13 +180,13 @@ export default function MeditateScreen() {
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: state.isConnected ? '#10B981' : '#F59E0B' },
+                  { backgroundColor: state.isConnected ? '#10B981' : '#EF4444' },
                 ]}
               />
               <Text style={styles.statusText}>
                 {state.isConnected
                   ? `Connected to ${state.deviceName}`
-                  : 'Muse not connected - meditation without EEG tracking'}
+                  : 'Muse not connected - connect from Home screen'}
               </Text>
             </View>
           </View>
@@ -331,6 +331,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     overflow: 'hidden',
     marginTop: 8,
+  },
+  startButtonDisabled: {
+    opacity: 0.7,
   },
   startButtonGradient: {
     flexDirection: 'row',

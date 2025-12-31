@@ -12,22 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMuseOrSimulator } from '../../src/hooks/useMuseOrSimulator';
+import { useMuse } from '../../src/hooks/useMuse';
 import { ConnectionCard } from '../../src/components/ConnectionCard';
 import { BrainWaveChart } from '../../src/components/BrainWaveChart';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { 
-    state, 
-    bandPowers, 
-    availableDevices, 
-    scan, 
-    connect, 
-    connectSimulator,
-    disconnect,
-    isSimulated 
-  } = useMuseOrSimulator();
+  const { state, bandPowers, availableDevices, scan, connect, disconnect } = useMuse();
   const [refreshing, setRefreshing] = useState(false);
 
   const handleConnect = useCallback(async () => {
@@ -37,17 +28,21 @@ export default function HomeScreen() {
         // For simplicity, connect to the first found device
         // In production, show a device picker
         await connect(availableDevices[0]);
+      } else {
+        Alert.alert(
+          'No Muse Found',
+          'Make sure your Muse headband is turned on and in pairing mode.',
+          [{ text: 'OK' }]
+        );
       }
-      // Note: scan() now shows simulator option if no devices found
     } catch (error) {
-      console.error('Connection error:', error);
-      // scan() handles showing simulator option on error
+      Alert.alert(
+        'Connection Failed',
+        'Unable to connect to Muse headband. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   }, [scan, connect, availableDevices]);
-
-  const handleDemoMode = useCallback(async () => {
-    await connectSimulator();
-  }, [connectSimulator]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -157,39 +152,6 @@ export default function HomeScreen() {
             <View style={styles.chartContainer}>
               <BrainWaveChart bandPowers={bandPowers} />
             </View>
-          </View>
-        )}
-
-        {/* Demo Mode Button (when not connected) */}
-        {!state.isConnected && (
-          <View style={styles.section}>
-            <TouchableOpacity style={styles.demoButton} onPress={handleDemoMode}>
-              <LinearGradient
-                colors={['rgba(6, 182, 212, 0.15)', 'rgba(139, 92, 246, 0.15)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.demoGradient}
-              >
-                <Ionicons name="play-circle-outline" size={24} color="#06B6D4" />
-                <View style={styles.demoContent}>
-                  <Text style={styles.demoTitle}>Try Demo Mode</Text>
-                  <Text style={styles.demoText}>
-                    No Muse headband? Test the app with simulated brain data
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.4)" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Simulated indicator */}
-        {isSimulated && state.isConnected && (
-          <View style={styles.simulatedBanner}>
-            <Ionicons name="information-circle-outline" size={18} color="#06B6D4" />
-            <Text style={styles.simulatedText}>
-              Using simulated data for demo purposes
-            </Text>
           </View>
         )}
 
@@ -365,46 +327,5 @@ const styles = StyleSheet.create({
   },
   tabBarSpacer: {
     height: 100,
-  },
-  demoButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  demoGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.2)',
-    borderRadius: 16,
-  },
-  demoContent: {
-    flex: 1,
-  },
-  demoTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 2,
-  },
-  demoText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
-  },
-  simulatedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  simulatedText: {
-    fontSize: 12,
-    color: '#06B6D4',
   },
 });
