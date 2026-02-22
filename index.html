@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Muse Neurofeedback | Live Viewer</title>
+    <style>
+        body {
+            background: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            padding: 2rem 0;
+            text-align: center;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
+        .status { margin-top: 0.5rem; font-size: 0.875rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; }
+        .dot.connected { background: #10b981; box-shadow: 0 0 8px #10b981; }
+
+        main {
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .band-container {
+            background: #1e293b;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 1rem;
+        }
+
+        .band-name { font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-size: 0.75rem; }
+        .band-value { font-family: monospace; font-size: 1.25rem; color: #38bdf8; }
+
+        .progress-bg {
+            height: 12px;
+            background: #0f172a;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.1s ease-out;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            margin-top: 0.75rem;
+        }
+
+        .channel-bar {
+            height: 4px;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        .channel-bar.active { background: #38bdf8; }
+
+        footer {
+            margin-top: auto;
+            padding: 2rem;
+            color: #475569;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>muse-neurofeedback</h1>
+        <div class="status">
+            <div id="connection-dot" class="dot"></div>
+            <span id="connection-text">Connecting to ws://localhost:8765...</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Alpha Band -->
+        <div class="band-container">
+            <div class="label-row">
+                <span class="band-name">Alpha (8-13 Hz) — Relaxation</span>
+                <span id="alpha-val" class="band-value">0.00</span>
+            </div>
+            <div class="progress-bg">
+                <div id="alpha-progress" class="progress-fill" style="background: linear-gradient(90deg, #10b981, #34d399);"></div>
+            </div>
+            <div class="channel-grid" id="alpha-channels">
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+            </div>
+        </div>
+
+        <!-- Theta Band -->
+        <div class="band-container">
+            <div class="label-row">
+                <span class="band-name">Theta (4-8 Hz) — Focus/Meditation</span>
+                <span id="theta-val" class="band-value">0.00</span>
+            </div>
+            <div class="progress-bg">
+                <div id="theta-progress" class="progress-fill" style="background: linear-gradient(90deg, #38bdf8, #818cf8);"></div>
+            </div>
+            <div class="channel-grid" id="theta-channels">
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+                <div class="channel-bar"></div>
+            </div>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 0.875rem;">
+            Ensure <strong>main.py</strong> is running and <strong>Mind Monitor</strong> is streaming.
+        </div>
+    </main>
+
+    <footer>
+        Part of the edwardemoryphotography GitHub ecosystem
+    </footer>
+
+    <script>
+        const dot = document.getElementById('connection-dot');
+        const text = document.getElementById('connection-text');
+        
+        const alphaVal = document.getElementById('alpha-val');
+        const alphaProgress = document.getElementById('alpha-progress');
+        const alphaBars = document.getElementById('alpha-channels').children;
+
+        const thetaVal = document.getElementById('theta-val');
+        const thetaProgress = document.getElementById('theta-progress');
+        const thetaBars = document.getElementById('theta-channels').children;
+
+        function connect() {
+            const ws = new WebSocket('ws://localhost:8765');
+
+            ws.onopen = () => {
+                dot.classList.add('connected');
+                text.innerText = 'Connected to Muse 2 Stream';
+                console.log('WebSocket Connected');
+            };
+
+            ws.onclose = () => {
+                dot.classList.remove('connected');
+                text.innerText = 'Disconnected. Retrying...';
+                console.log('WebSocket Disconnected. Retrying in 2s...');
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket Error:', err);
+                ws.close();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // We expect args to be an array of 4 values (TP9, AF7, AF8, TP10)
+                    if (data.address === '/muse/elements/alpha_absolute') {
+                        updateBand(data.args, alphaVal, alphaProgress, alphaBars);
+                    } else if (data.address === '/muse/elements/theta_absolute') {
+                        updateBand(data.args, thetaVal, thetaProgress, thetaBars);
+                    }
+                } catch (e) {
+                    console.error('Error parsing message:', e);
+                }
+            };
+        }
+
+        function updateBand(args, valEl, progressEl, bars) {
+            // Absolute band powers are roughly 0-1, but can exceed it. 
+            // We'll average the 4 sensors for the main bar and show individual channel activity.
+            const avg = args.reduce((a, b) => a + b, 0) / args.length;
+            
+            // UI Update
+            valEl.innerText = avg.toFixed(3);
+            
+            // Progress bar width (capped at 100%)
+            const percent = Math.min(Math.max(avg * 100, 0), 100);
+            progressEl.style.width = percent + '%';
+
+            // Channel indicators
+            for (let i = 0; i < args.length; i++) {
+                if (args[i] > 0.1) { // Basic threshold for "activity"
+                    bars[i].classList.add('active');
+                } else {
+                    bars[i].classList.remove('active');
+                }
+            }
+        }
+
+        connect();
+    </script>
+</body>
+</html>
