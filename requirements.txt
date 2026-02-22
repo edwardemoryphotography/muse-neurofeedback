@@ -1,0 +1,10 @@
+# muse-neurofeedback requirements
+# Python 3.9+
+#
+# Install with: pip install -r requirements.txt
+
+# OSC (Open Sound Control) server — receives data from Mind Monitor
+python-osc>=1.8.0
+
+# WebSocket server — broadcasts EEG data to connected clients
+websockets>=10.0
